@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 
-#porttest5.py: decode binary format and clear text format. readline() does not work anymore as \n can be part of the payload. stable version.
-#porttest6.py: indicate if binary or clear text format was detected (for debug purposes only)
-#porttest7.py: use ISO week for file name generation, not python style week number
-#porttest8.py:  Error log and last log go into temporary tmpfs /var/tmp
-#porttest9.py:  don't log erroneous lines if status register does not contain DQD or CRL
-#prttest10.py: experimental build for FEC decoding
+# porttest5.py: decode binary format and clear text format. readline() does not work anymore as \n can be part of the payload. stable version.
+# porttest6.py: indicate if binary or clear text format was detected (for debug purposes only)
+# porttest7.py: use ISO week for file name generation, not python style week number
+# porttest8.py: Error log and last log go into temporary tmpfs /var/tmp
+# porttest9.py: don't log erroneous lines if status register does not contain DQD or CRL
+# prttest10.py: experimental build for FEC decoding
+
+# rename to tiny_receive.py
+# 
 
 import serial
 import time, datetime
@@ -92,13 +95,25 @@ def decode_hamming_3_bytes(payload, codes = hamming_codes):
             biterrors_max_per_byte = biterrors
         
     return val, biterrors_total, biterrors_max_per_byte
-        
-        
+
+
+def read_from_port (port)
+    raw_line = port.read(port.inWaiting())
+    if '\r\n' not in raw_line[-2:]:
+        done = False
+        while not done:
+            if port.inWaiting() > 0:
+                crlf = port.read(port.inWaiting())
+                raw_line += crlf
+                if '\r\n' in raw_line[-2:]: done = True
+            else:
+                time.sleep(.001) # 1 ms
+    line = raw_line[:-2]
+    return line
+    
 os.environ['TZ'] = 'Europe/Paris'
 time.tzset()
 
-#t = time.strftime('%W %a %d.%m.%Y %H:%M:%S', time.localtime(time.time()))
-#t = time.strftime('%a %d.%m.%Y %H:%M:%S', time.localtime(time.time()))
 
 #default filename for valid records
 filename = "tinyRx_record.csv"
@@ -128,22 +143,11 @@ results={}
 last_log_dict= {}
 
 while (True):    
-    #line = port.readline()[:-2]
     if port.inWaiting() > 0:
         time.sleep(0.1)
-        raw_line = port.read(port.inWaiting())
-        if '\r\n' not in raw_line[-2:]:
-            done = False
-            while not done:
-                if port.inWaiting() > 0:
-                    crlf = port.read(port.inWaiting())
-                    raw_line += crlf
-                    if '\r\n' in raw_line[-2:]: done = True
-                else:
-                    time.sleep(.001)
-        line = raw_line[:-2]
+        line = read_from_port(port)
     else:
-        time.sleep(0.1)
+        time.sleep(0.1) # wait 100ms 
         continue
         
     #print line
@@ -151,7 +155,7 @@ while (True):
     zeit = time.strftime('%a,%d.%m.%Y,%H:%M:%S', loctime)
 
     results.clear()
-    #look for BAD-CRC message
+    #look for BAD-CRC message, extract node and message
     if "BAD-CRC," not in line:
         i= string.find(line, " ")
         if i>0:
@@ -161,16 +165,11 @@ while (True):
             node ='0'
             msg=''
             print "no space in string:"
-            for sign in raw_line:
+            for sign in line:
                 print ord(sign)
             continue
         s = "%s,n,%s" % (zeit, node)  
-        '''
-        if node == '27': 
-            print line
-            for sign in msg:
-                print ord(sign)
-        '''
+
         # decide if clear text format or a binary format is received
         if "v=" in msg and "&t=" in msg: #clear text transmission format
             vals = msg.split('&')
@@ -179,47 +178,19 @@ while (True):
                 if len(itemlst) > 1:
                     results[itemlst[0]] = itemlst[1]
             messungen = results.keys()
-            '''
-            for messung in messungen:
-                if 's'in messung:
-                    si=int(results[messung], 16)
-                    afc= si&0xf
-                    if si&0x10:
-                        afc=-((afc^0xf)+1) # 2's complement
-                    s = "%s,a,%s,s,%s" % (s, afc, si>>8) #drssi bit
-                else:
-                    s = "%s,%s,%s" % (s, messung , str(results[messung]))
-            '''        
+
             if 's' in messungen: 
                 si=int(results['s'], 16)
                 afc= si&0xf
                 if si&0x10:
                     afc=-((afc^0xf)+1) # 2's complement
                 s = "%s,a,%s,s,%s" % (s, afc, si>>8) #drssi bit
-                
-            #if 'v' in messungen:
-                #s = "%s,%s,%s" % (s, 'v' , str(results['v']))
-                
-            #if 't' in messungen:
-                #messung='t'
-                #s = "%s,%s,%s" % (s, messung , str(results[messung]))
-            
+
             s = "%s%s" % (s, extract_data('v', results))
             s = "%s%s" % (s, extract_data('t', results))
             s = "%s%s" % (s, extract_data('h', results))
             s = "%s%s" % (s, extract_data('c', results))
-             
-            '''
-            if 'h' in messungen:
-                messung='h'
-                s = "%s,%s,%s" % (s, messung , str(results[messung]))
-                
-            if 'c' in messungen:
-                messung='c'
-                s = "%s,%s,%s" % (s, messung , str(results[messung])) 
-             '''
-            #s.append(",f,TXT")
-            
+
         else: #binary format
             #binary format looks like this:<node><space><message>&s=<status_reg>
             #split off the status register which is transmitted in clear text.
@@ -290,9 +261,10 @@ while (True):
         msg = line.split(',')
         statreg = int(msg[2][2:], 16)
         node =    msg[1]
-        payload = msg[3][5:]
+        payload = msg[3][5:] # format is : "data=xxyyzz" but we only want "xxyyzz"
 
         if node == '3' or node =='26': #FEC encoded node with error, so we try to correct it
+            # string looks like this: "BAD CRC,<node>,s=0xXY,data=xxxyyyzzz..."
             print "BAD-CRC - try to recover data from FEC codes"
             afc= statreg&0xf            #extract afc
             if statreg&0x10: 

@@ -52,7 +52,7 @@ typedef struct
    int16_t count; // how many packets have been sent since inception of node
 }  Payload;
 */
-
+/*
 typedef struct
 {
     int16_t supplyV_h;
@@ -63,6 +63,14 @@ typedef struct
     int16_t hum_l;
     int16_t count_h;
     int16_t count_l;
+} Payload_fec;
+*/
+
+typedef struct
+{
+    unsigned char vcc[3];
+    unsigned char temp[3];
+    unsigned char hum[2];
 } Payload_fec;
 
 //Payload_fec tinytx_fec;
@@ -116,13 +124,14 @@ void loop() {
       mySerial.print(" ");
       radio.Data[*radio.DataLen] =0;
       // if clear text is sent, data begin with "v=" and contain "&t="
-      if (strstr( (char*) radio.Data, "v=") && strstr( (char*) radio.Data, "&t="))
+      //if (strstr( (char*) radio.Data, "v=") && strstr( (char*) radio.Data, "&t="))
       {
           for (byte i = 0; i < *radio.DataLen; i++)   //can also use radio.GetDataLen() if you don't like pointers
           { 
             mySerial.print((char) radio.Data[i]);
           }
       }
+      /*
       else //binary format: bytes 0,1 = vcc; bytes 2,3 = temp; bytes 4,5 = humidity; bytes 6,7 = count
       {
         Payload_fec *tinytx;
@@ -147,6 +156,7 @@ void loop() {
             mySerial.print(tinytx->count_l, DEC);
         }
       }
+      */
       
       mySerial.print("&s=");
       mySerial.print(radio.status_reg, HEX);
