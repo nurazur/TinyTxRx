@@ -217,7 +217,6 @@ while (True):
         extract_data('t', results),
         extract_data('h', results),
         extract_data('c', results))
-        #print "LogString: %s" % (logstring)
 
     elif not cleartext:
         if node == '3' or node =='26':
@@ -225,16 +224,16 @@ while (True):
 
         # binary mode: don't care if CRC valid or not
         datalen = len(payload) 
-        print "Datenlaenge: %d" % datalen
+        #print "Datenlaenge: %d" % datalen
         
         biterrors_total = 0
         biterrors_max_per_byte =0
         
         if datalen >=3:
             vcc, biterrors_total, biterrors_max_per_byte = decode_hamming_3_bytes(payload)
-            #print "        VCC:  %i, %i biterrors" % (vcc, biterrors_total)
+            # print "        VCC:  %i, %i biterrors" % (vcc, biterrors_total)
             logstring = "%s,v,%s" % (logstring, vcc)
-            
+
         if datalen >=6:
             temp, biterrors, biterrors_max_pb = decode_hamming_3_bytes(payload[3:])
             biterrors_total += biterrors
@@ -243,7 +242,7 @@ while (True):
             temp = (temp-1000)*4
             #print "Temperature:  %i, %i biterrors" % (temp, biterrors_total)
             logstring = "%s,t,%s" % (logstring, temp)
-            
+
         if datalen >=8:
             hum=0
             for i in range(6,8):
@@ -254,7 +253,7 @@ while (True):
                 if biterrors > biterrors_max_per_byte:
                     biterrors_max_per_byte = biterrors
             hum = hum * 50
-            #print "   Humidity:  %i, %i biterrors" % (hum, biterrors_total)
+            # print "   Humidity:  %i, %i biterrors" % (hum, biterrors_total)
             logstring = "%s,h,%s" % (logstring, hum)
         if isvalid:
             if biterrors_max_per_byte == 0:
@@ -268,11 +267,11 @@ while (True):
                 logstring += ",f,%i" % biterrors_total
             else:
                 logstring += ",f,fail,%i" % biterrors_total
-                
+
     print "LogString: %s" % logstring
     if is_valid_node:
         write_logfile(record_filename(loctime), logstring)
-        
+
         #update file with latest records for each node
         last_log_dict[node] = logstring
         fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
@@ -288,202 +287,3 @@ while (True):
             write_logfile(logfilename, errstr)
         else:
             pass # do nothing, forget received line
-'''
-    #look for BAD-CRC message, extract node and message
-    if "BAD-CRC," not in line:
-        i= string.find(line, " ")
-        if i>0:
-            node = line[:i]
-            msg  = line[i+1:]
-        else:
-            node ='0'
-            msg=''
-            print "no space in string:"
-            for sign in line:
-                print ord(sign)
-            continue
-        s = "%s,n,%s" % (zeit, node)  
-
-        # decide if clear text format or a binary format is received
-        if "v=" in msg and "&t=" in msg: #clear text transmission format
-            vals = msg.split('&')
-            for messung in vals:
-                itemlst = messung.split('=')
-                if len(itemlst) > 1:
-                    results[itemlst[0]] = itemlst[1]
-            messungen = results.keys()
-
-            if 's' in messungen: 
-                si=int(results['s'], 16)
-                afc= si&0xf
-                if si&0x10:
-                    afc=-((afc^0xf)+1) # 2's complement
-                s = "%s,a,%s,s,%s" % (s, afc, si>>8) #drssi bit
-
-            s = "%s%s" % (s, extract_data('v', results))
-            s = "%s%s" % (s, extract_data('t', results))
-            s = "%s%s" % (s, extract_data('h', results))
-            s = "%s%s" % (s, extract_data('c', results))
-
-        else: #binary format
-            #binary format looks like this:<node><space><message>&s=<status_reg>
-            #split off the status register which is transmitted in clear text.
-            try:
-                i = string.rfind(msg, '&s=')  # i points to '&' in '&s='
-                stat_reg_str= msg[i+3:]
-                if len(stat_reg_str) > 0:
-                    si=int(stat_reg_str,16)
-                    afc= si&0xf            #extract afc
-                    if si&0x10: 
-                        afc=-((afc^0xf)+1) # 2's complement
-                    s = "%s,a,%s,s,%s" % (s, afc, si>>8) # extract drssi bit
-                else:
-                    print "no status byte detected"
-                payload = msg[:i]
-                results_b = list()
-                datalen = len(payload) 
-                print "Datenlaenge: %d" % datalen
-                
-                if datalen >=3:
-                    print hex(ord(payload[0])), hex(ord(payload[1])), hex(ord(payload[2]))
-                    vcc, biterrors_total, biterrors_max_per_byte_vcc = decode_hamming_3_bytes(payload)
-
-                    print "        VCC:  %i, %i biterrors" % (vcc, biterrors_total)
-                    s = "%s,v,%s" % (s,vcc)
-                    
-                if datalen >=6:
-                    print hex(ord(payload[3])), hex(ord(payload[4])), hex(ord(payload[5]))
-                    temp, biterrors_total, biterrors_max_per_byte_vcc = decode_hamming_3_bytes(payload[3:])
-
-                    temp = (temp-1000)*4
-                    print "Temperature:  %i, %i biterrors" % (temp, biterrors_total)
-                    s = "%s,t,%s" % (s, temp)
-                
-                if datalen >=8:
-                    print hex(ord(payload[6])), hex(ord(payload[7]))
-                    hum=0
-                    
-                    for i in range(6,8):
-                        hum <<=4
-                        dec_val, biterrors = decode_hamming (ord(payload[i])) # high byte, low nibble
-                        hum = hum | dec_val
-                        biterrors_total += biterrors
-
-                    hum = hum * 50
-                    print "   Humidity:  %i, %i biterrors" % (hum, biterrors_total)
-                    s = "%s,h,%s" % (s,hum)
-                    
-                s = "%s,f,ok" % s
-            except:
-                logfilename = '%s%s' % (tmp_verzeichnis, errorlogfile) 
-                errstr = "%s,%s,%s,%s" % (s, sys.exc_info()[0], sys.exc_info()[1], sys.exc_info()[2])
-                #write into log file
-                write_logfile(logfilename, errstr)
-                
-        #write_logfile(record_filename(loctime), s)
-        
-        last_log_dict[node] = s
-        fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
-        last_log = open(fn,'w')
-        for key in last_log_dict:
-            last_log.write(last_log_dict[key])
-            last_log.write('\n')
-        last_log.close()
-
-    else: #BAD CRC
-        #extract status register
-        msg = line.split(',')
-        statreg = int(msg[2][2:], 16)
-        node =    msg[1]
-        payload = msg[3][5:] # format is : "data=xxyyzz" but we only want "xxyyzz"
-
-        if node == '3' or node =='26': #FEC encoded node with error, so we try to correct it
-            # string looks like this: "BAD CRC,<node>,s=0xXY,data=xxxyyyzzz..."
-            print "BAD-CRC - try to recover data from FEC codes"
-            afc= statreg&0xf            #extract afc
-            if statreg&0x10: 
-                afc=-((afc^0xf)+1) # 2's complement
-            s="%s,n,%s,a,%s,s,%s" %(zeit, node, afc, statreg>>8)
-            
-            datalen = len(payload)
-            print "Datenlaenge: %d" % datalen
-            biterrors_total =0
-            biterrors_per_byte_vcc_max =0
-            biterrors_per_byte_temp_max =0
-            biterrors_per_byte_hum_max= 0
-            
-            if datalen >=3:
-                print hex(ord(payload[0])), hex(ord(payload[1])), hex(ord(payload[2]))
-                vcc=0
-                
-                for i in range(0,3):
-                    vcc <<=4
-                    dec_val, biterrors = decode_hamming (ord(payload[i]), hamming_codes) # high byte, low nibble
-                    vcc = vcc | dec_val
-                    biterrors_total += biterrors
-                    if biterrors > biterrors_per_byte_vcc_max:
-                        biterrors_per_byte_vcc_max = biterrors
-                print "VCC calculated:  %i, %i biterrors, max %i biterrors in a byte" % (vcc, biterrors_total, biterrors_per_byte_vcc_max)
-                s = "%s,v,%s" % (s,vcc)
-                    
-            if datalen >=6:
-                print hex(ord(payload[3])), hex(ord(payload[4])), hex(ord(payload[5]))
-                temp=0
-                #biterrors_total =0
-                for i in range(3,6):
-                    temp <<=4
-                    dec_val, biterrors = decode_hamming (ord(payload[i]), hamming_codes) 
-                    temp = temp | dec_val
-                    biterrors_total += biterrors
-                    if biterrors > biterrors_per_byte_temp_max:
-                        biterrors_per_byte_temp_max = biterrors
-                temp = (temp-1000)*4
-                print "Temperature:  %i, %i total biterrors, max %i biterrors in a byte" % (temp, biterrors_total, biterrors_per_byte_temp_max)   
-                s = "%s,t,%s" % (s, temp)
-            
-            if datalen >=8:
-                print hex(ord(payload[6])), hex(ord(payload[7]))
-                hum=0
-                
-                for i in range(6,8):
-                    hum <<=4
-                    dec_val, biterrors = decode_hamming (ord(payload[i]), hamming_codes) # high byte, low nibble
-                    hum = hum | dec_val
-                    biterrors_total += biterrors
-                    if biterrors > biterrors_per_byte_hum_max:
-                        biterrors_per_byte_hum_max = biterrors
-                hum = hum * 50
-                print "Humidity:  %i, %i total biterrors, max %i biterrors in a byte" % (hum, biterrors_total, biterrors_per_byte_hum_max)
-                s = "%s,h,%s" % (s,hum)
-            
-            if biterrors_per_byte_temp_max > 1 or biterrors_per_byte_vcc_max > 1 or biterrors_per_byte_hum_max > 1:
-                #error!
-                logfilename = '%s%s' % (tmp_verzeichnis, errorlogfile)
-                s = "%s,f,fail" % s
-                #write_logfile(logfilename, s)
-            else:
-                s = "%s,f,%i" % (s, biterrors_total)
-                #write_logfile(record_filename(loctime),s)
-                
-                last_log_dict[node] = s
-                fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
-                last_log = open(fn,'w')
-                for key in last_log_dict:
-                    last_log.write(last_log_dict[key])
-                    last_log.write('\n')
-                last_log.close()
-                
-        #store erroneous line, but only if CRL and/or DQD are set - if none is set, the data are total crap, not worth storing
-        else: #node is not 3, so its not a FEC encoded message
-            s= "%s,%s" % (zeit,line)
-            if statreg & 0xC0:
-                logfilename = '%s%s' % (tmp_verzeichnis, errorlogfile) 
-                #write_logfile(logfilename, s)
-
-            else:
-                print "the following line wasn't stored!"
-       
-    
-    print s
-   
-'''
