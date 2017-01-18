@@ -97,7 +97,7 @@ def decode_hamming_3_bytes(payload, codes = hamming_codes):
     return val, biterrors_total, biterrors_max_per_byte
 
 
-def read_from_port (port)
+def read_from_port (port):
     raw_line = port.read(port.inWaiting())
     if '\r\n' not in raw_line[-2:]:
         done = False
@@ -110,6 +110,13 @@ def read_from_port (port)
                 time.sleep(.001) # 1 ms
     line = raw_line[:-2]
     return line
+
+    
+def decode_rfm12b_afc_drssi(sreg):
+    afc= sreg & 0xf
+    if sreg & 0x10:
+        afc=-((afc^0xf)+1) # 2's complement
+    return "a,%s,s,%s" % (afc, sreg>>8) #drssi bit
     
 os.environ['TZ'] = 'Europe/Paris'
 time.tzset()
@@ -155,6 +162,122 @@ while (True):
     zeit = time.strftime('%a,%d.%m.%Y,%H:%M:%S', loctime)
 
     results.clear()
+
+    isvalid = False
+    cleartext = False
+
+    # some experimental code 
+    if "BAD-CRC," in line:
+        msg = line.split(',')
+        node =    msg[1]
+        statreg = int(msg[2][2:], 16)
+        payload = msg[3][5:] # format is : "data=xxyyzz" but we only want "xxyyzz"
+    else:
+        i= string.find(line, " ")
+        if i>0:
+            node = line[:i]
+            msg  = line[i+1:]
+            isvalid  = True
+            if "v=" in msg and "&t=" in msg:
+                cleartext = True
+            i = string.rfind(msg, '&s=')  # i points to '&' in '&s='
+            statreg = int(msg[i+3:], 16)
+            payload = msg[:i]
+        else:
+            node ='0'
+            msg=''
+            print "no space in string:"
+            continue
+
+    logstring = "%s,n,%s,%s" % (zeit, node, decode_rfm12b_afc_drssi(statreg))
+    is_valid_node = False
+    
+    if isvalid and cleartext:
+        is_valid_node = True
+        # old verbose output, php compatible
+        vals = payload.split('&')
+        for messung in vals: # build dictionary
+            itemlst = messung.split('=')
+            if len(itemlst) > 1:
+                results[itemlst[0]] = itemlst[1]
+                
+        logstring = "%s%s%s%s%s" % (logstring, extract_data('v', results),
+        extract_data('t', results),
+        extract_data('h', results),
+        extract_data('c', results))
+        #print "LogString: %s" % (logstring)
+
+    elif not cleartext:
+        if node == '3' or node =='26':
+            is_valid_node = True
+
+        # binary mode: don't care if CRC valid or not
+        datalen = len(payload) 
+        print "Datenlaenge: %d" % datalen
+        
+        biterrors_total = 0
+        biterrors_max_per_byte =0
+        
+        if datalen >=3:
+            vcc, biterrors_total, biterrors_max_per_byte = decode_hamming_3_bytes(payload)
+            #print "        VCC:  %i, %i biterrors" % (vcc, biterrors_total)
+            logstring = "%s,v,%s" % (logstring, vcc)
+            
+        if datalen >=6:
+            temp, biterrors, biterrors_max_pb = decode_hamming_3_bytes(payload[3:])
+            biterrors_total += biterrors
+            if biterrors_max_pb > biterrors_max_per_byte:
+                biterrors_max_per_byte = biterrors_max_pb
+            temp = (temp-1000)*4
+            #print "Temperature:  %i, %i biterrors" % (temp, biterrors_total)
+            logstring = "%s,t,%s" % (logstring, temp)
+            
+        if datalen >=8:
+            hum=0
+            for i in range(6,8):
+                hum <<=4
+                dec_val, biterrors = decode_hamming (ord(payload[i])) # high byte, low nibble
+                hum = hum | dec_val
+                biterrors_total += biterrors
+                if biterrors > biterrors_max_per_byte:
+                    biterrors_max_per_byte = biterrors
+            hum = hum * 50
+            #print "   Humidity:  %i, %i biterrors" % (hum, biterrors_total)
+            logstring = "%s,h,%s" % (logstring, hum)
+        if isvalid:
+            if biterrors_max_per_byte == 0:
+                logstring += ",f,OK"
+            if biterrors_max_per_byte > 0:     # does happen when we remove CRC completely
+                logstring += ",f,%i" % biterrors_total
+        else:
+            if biterrors_max_per_byte ==0: # BAD CRC but decoding was successful - the error is in the CRC!
+                logstring += ",f,0"
+            if 2 > biterrors_max_per_byte and biterrors_max_per_byte > 0:
+                logstring += ",f,%i" % biterrors_total
+            else:
+                logstring += ",f,fail,%i" % biterrors_total
+                
+    print "LogString: %s" % logstring
+    if is_valid_node:
+        write_logfile(record_filename(loctime), logstring)
+        
+        #update file with latest records for each node
+        last_log_dict[node] = logstring
+        fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
+        last_log = open(fn,'w')
+        for key in last_log_dict:
+            last_log.write(last_log_dict[key])
+            last_log.write('\n')
+        last_log.close()
+    else: 
+        if statreg & 0xC0:
+            errstr= "%s,%s" % (zeit,line)
+            logfilename = '%s%s' % (tmp_verzeichnis, errorlogfile) 
+            write_logfile(logfilename, errstr)
+        else:
+            pass # do nothing, forget received line
+    # end of experimental code
+    
     #look for BAD-CRC message, extract node and message
     if "BAD-CRC," not in line:
         i= string.find(line, " ")
@@ -246,7 +369,7 @@ while (True):
                 #write into log file
                 write_logfile(logfilename, errstr)
                 
-        write_logfile(record_filename(loctime), s)
+        #write_logfile(record_filename(loctime), s)
         
         last_log_dict[node] = s
         fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
@@ -326,10 +449,10 @@ while (True):
                 #error!
                 logfilename = '%s%s' % (tmp_verzeichnis, errorlogfile)
                 s = "%s,f,fail" % s
-                write_logfile(logfilename, s)
+                #write_logfile(logfilename, s)
             else:
                 s = "%s,f,%i" % (s, biterrors_total)
-                write_logfile(record_filename(loctime),s)
+                #write_logfile(record_filename(loctime),s)
                 
                 last_log_dict[node] = s
                 fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
@@ -344,7 +467,7 @@ while (True):
             s= "%s,%s" % (zeit,line)
             if statreg & 0xC0:
                 logfilename = '%s%s' % (tmp_verzeichnis, errorlogfile) 
-                write_logfile(logfilename, s)
+                #write_logfile(logfilename, s)
 
             else:
                 print "the following line wasn't stored!"
