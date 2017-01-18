@@ -146,9 +146,21 @@ port = serial.Serial('/dev/ttyAMA0',9600)
 if not port.isOpen():
     print "cannot connect to serial port."
     sys.exit(1)
+
 results={}
 last_log_dict= {}
 
+#fill last_log_dict with existing entries
+fn = '%s%s' % (tmp_verzeichnis, last_log_filename)
+f = open(fn, 'r')
+thefile = f.read().split('\n')
+f.close()
+for line in thefile:
+    sensor = line.split(',')
+    if len(sensor) > 3:
+        last_log_dict[sensor[4]] = line
+        
+#Main loop
 while (True):    
     if port.inWaiting() > 0:
         time.sleep(0.1)
@@ -276,8 +288,7 @@ while (True):
             write_logfile(logfilename, errstr)
         else:
             pass # do nothing, forget received line
-    # end of experimental code
-    
+'''
     #look for BAD-CRC message, extract node and message
     if "BAD-CRC," not in line:
         i= string.find(line, " ")
@@ -475,3 +486,4 @@ while (True):
     
     print s
    
+'''
