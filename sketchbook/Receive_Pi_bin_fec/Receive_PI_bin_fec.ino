@@ -43,29 +43,6 @@ INT0  PWM (D2) PB2  5|    |10  PA3 (D7)
 // - to stop encrypting call .Encrypt(NULL)
 //#define KEY   "ABCDABCDABCDABCD"
 
-/*
-typedef struct 
-{ 
-   int16_t supplyV;	// Supply voltage 
-   int16_t temp;	// Temperature reading 
-   int16_t humidity;	// Humidity reading
-   int16_t count; // how many packets have been sent since inception of node
-}  Payload;
-*/
-/*
-typedef struct
-{
-    int16_t supplyV_h;
-    int16_t supplyV_l;
-    int16_t temp_h;
-    int16_t temp_l;
-    int16_t hum_h;
-    int16_t hum_l;
-    int16_t count_h;
-    int16_t count_l;
-} Payload_fec;
-*/
-
 typedef struct
 {
     unsigned char vcc[3];
@@ -73,7 +50,6 @@ typedef struct
     unsigned char hum[2];
 } Payload_fec;
 
-//Payload_fec tinytx_fec;
 
 
 // Initialise UART
@@ -123,40 +99,12 @@ void loop() {
       mySerial.print(radio.GetSender(), DEC);
       mySerial.print(" ");
       radio.Data[*radio.DataLen] =0;
-      // if clear text is sent, data begin with "v=" and contain "&t="
-      //if (strstr( (char*) radio.Data, "v=") && strstr( (char*) radio.Data, "&t="))
-      {
-          for (byte i = 0; i < *radio.DataLen; i++)   //can also use radio.GetDataLen() if you don't like pointers
-          { 
-            mySerial.print((char) radio.Data[i]);
-          }
+      
+      for (byte i = 0; i < *radio.DataLen; i++)   //can also use radio.GetDataLen() if you don't like pointers
+      { 
+          mySerial.print((char) radio.Data[i]);
       }
-      /*
-      else //binary format: bytes 0,1 = vcc; bytes 2,3 = temp; bytes 4,5 = humidity; bytes 6,7 = count
-      {
-        Payload_fec *tinytx;
-        tinytx = (Payload_fec*) radio.Data;
-        //int16_t vcc = tinytx->supplyV;
-        //mySerial.print("v=");
-        mySerial.print(tinytx->supplyV_h, DEC);
-        mySerial.print(tinytx->supplyV_l, DEC);
-        //mySerial.print("&t=");
-        mySerial.print(tinytx->temp_h, DEC);
-        mySerial.print(tinytx->temp_l, DEC);
-        if (*radio.DataLen > 8)
-        {
-            //mySerial.print("&h=");
-            mySerial.print(tinytx->hum_h, DEC);
-            mySerial.print(tinytx->hum_l, DEC);
-        }
-        if (*radio.DataLen > 12)
-        {
-            //mySerial.print("&c=");
-            mySerial.print(tinytx->count_h, DEC);
-            mySerial.print(tinytx->count_l, DEC);
-        }
-      }
-      */
+      
       
       mySerial.print("&s=");
       mySerial.print(radio.status_reg, HEX);
