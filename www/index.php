@@ -97,19 +97,7 @@
 		}        
         return;
     }
-/*
-    function energy_per_time(span)
-    {
-        if (span == 1)
-        {
-            self.document.getElementById("production_over_time").src = './graph/daily_plot.php' ;
-        }
-        else if (span ==7)
-        {
-            self.document.getElementById("production_over_time").src = './graph/weekly_plot.php' ;
-        }
-    }
-*/
+
     function reload_now()
     {
         clearInterval();
@@ -136,32 +124,20 @@
         {      
             self.document.getElementById("TageZurueck").style.visibility="visible";
             self.document.getElementById("TageZurueck").style.display="inline";
-            
-            //self.document.getElementById("Zeitraum").style.visibility="hidden";
             self.document.getElementById("Zeitraum").style.display="none";
-            
-            //self.document.getElementById("EinMonat").style.visibility="hidden";
             self.document.getElementById("EinMonat").style.display="none";
         }
         else if (index == 1)
         {
-            //self.document.getElementById("TageZurueck").style.visibility="hidden";
             self.document.getElementById("TageZurueck").style.display="none";
-            
             self.document.getElementById("Zeitraum").style.visibility="visible";
             self.document.getElementById("Zeitraum").style.display="inline";
-            
-            //self.document.getElementById("EinMonat").style.dvisibility="hidden";
             self.document.getElementById("EinMonat").style.display="none";
         }
         else if (index == 2)
         {
-            //self.document.getElementById("TageZurueck").style.visibility="hidden";
             self.document.getElementById("TageZurueck").style.display="none";
-            
-            //self.document.getElementById("Zeitraum").style.visibility="hidden";
             self.document.getElementById("Zeitraum").style.display="none";
-            
             self.document.getElementById("EinMonat").style.visibility="visible";
             self.document.getElementById("EinMonat").style.display="inline";
         }
